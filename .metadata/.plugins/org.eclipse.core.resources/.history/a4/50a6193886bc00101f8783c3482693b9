@@ -1,5 +1,0 @@
-package com.call_logs.system.dto;
-
-public class BillRequest {
-
-}
