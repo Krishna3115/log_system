@@ -1,0 +1,29 @@
+package com.call_logs.system.service;
+
+import java.util.List;
+
+import com.call_logs.system.dto.CallLogRequest;
+import com.call_logs.system.dto.EmployeeDispatchRequest;
+import com.call_logs.system.dto.PartRequest;
+import com.call_logs.system.dto.QueryRequest;
+import com.call_logs.system.dto.SystemReceiveRequest;
+import com.call_logs.system.entity.CallLog;
+import com.call_logs.system.entity.CallLogQuery;
+import com.call_logs.system.enums.Status;
+
+public interface CallLogService {
+
+    CallLog createCallLog(CallLogRequest request);
+    List<CallLog> getAllLogs();
+    List<CallLog> getLogsByUser(Long userId);
+    List<CallLog> getLogsByStatus(Status status);
+    CallLog updateStatus(Long callLogId, Status status);
+    CallLog assignEmployee(Long callLogId, EmployeeDispatchRequest request);
+    CallLog receiveInOffice(Long callLogId, SystemReceiveRequest request);
+    
+    public CallLogQuery addQuery(Long callLogId, QueryRequest req);
+    
+    void addPart(Long systemId, PartRequest request);
+
+
+}

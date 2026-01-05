@@ -1,0 +1,180 @@
+package com.call_logs.system.controller;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import com.call_logs.system.dto.BillRequest;
+import com.call_logs.system.dto.CallLogRequest;
+import com.call_logs.system.dto.EmailQueryRequest;
+import com.call_logs.system.dto.EmployeeDispatchRequest;
+import com.call_logs.system.dto.PartRequest;
+import com.call_logs.system.dto.QueryRequest;
+import com.call_logs.system.dto.SystemReceiveRequest;
+import com.call_logs.system.entity.CallLog;
+import com.call_logs.system.entity.CallLogQuery;
+import com.call_logs.system.entity.Part;
+import com.call_logs.system.entity.User;
+import com.call_logs.system.enums.Status;
+import com.call_logs.system.service.CallLogQueryService;
+import com.call_logs.system.service.CallLogQueryServiceImpl;
+import com.call_logs.system.service.CallLogService;
+
+@RestController
+@RequestMapping("/api/calllogs")
+public class CallLogController {
+
+    @Autowired
+    private CallLogService callLogService;
+    
+    @Autowired
+    private CallLogQueryService callLogQueryService;
+    
+
+    @PostMapping
+    public ResponseEntity<CallLog> create(@RequestBody CallLogRequest request) {
+        return ResponseEntity.ok(callLogService.createCallLog(request));
+    }
+
+    @GetMapping
+    public List<CallLog> getAll() {
+        return callLogService.getAllLogs();
+    }
+
+    @GetMapping("/pending")
+    public ResponseEntity<List<CallLog>> getPendingLogs() {
+        return ResponseEntity.ok(callLogService.getLogsByStatus(Status.PENDING));
+    }
+
+    @PutMapping("/{id}/status")
+    public ResponseEntity<CallLog> updateStatus(@PathVariable Long id, @RequestParam Status status) {
+        return ResponseEntity.ok(callLogService.updateStatus(id, status));
+    }
+
+    @PostMapping("/{id}/assign-employee")
+    public ResponseEntity<CallLog> assignEmployee(@PathVariable Long id, @RequestBody EmployeeDispatchRequest request) {
+        return ResponseEntity.ok(callLogService.assignEmployee(id, request));
+    }
+
+    @PostMapping("/{id}/receive-in-office")
+    public ResponseEntity<CallLog> receiveInOffice(@PathVariable(name = "id") Long id, @RequestBody SystemReceiveRequest request) {
+        return ResponseEntity.ok(callLogService.receiveInOffice(id, request));
+    }
+    
+    @GetMapping("/received-systems")
+    public ResponseEntity<List<Map<String, Object>>> getReceivedSystems() {
+        List<CallLog> receivedLogs = callLogService.getLogsByStatus(Status.RECEIVED_IN_OFFICE);
+
+        List<Map<String, Object>> response = new ArrayList<>();
+
+        for (CallLog log : receivedLogs) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", log.getId());
+            map.put("systemNumber", log.getSystemNumber());
+            map.put("customerName", log.getCustomerName());
+            map.put("mobileNumber", log.getMobileNumber());
+            map.put("systemType", log.getSystemType());
+            map.put("deliveryDate", log.getDeliveryDate());
+            map.put("receivedAccessories", log.getReceivedAccessories());
+
+            // Receiver name
+            User receiver = log.getReceivedBy();
+            map.put("receivedByName", receiver != null ? receiver.getUsername() : "N/A");
+
+            // ✅ Check if query exists
+            map.put("hasQuery", log.getQueries() != null && !log.getQueries().isEmpty());
+
+            response.add(map);
+        }
+
+        return ResponseEntity.ok(response);
+    }
+
+    
+    @PostMapping("/{id}/queries")
+    public ResponseEntity<CallLogQuery> addQuery(
+            @PathVariable("id") Long id,
+            @RequestBody QueryRequest req) {
+        CallLogQuery saved = callLogService.addQuery(id, req);
+        return ResponseEntity.ok(saved);
+    }
+    
+    
+    @PostMapping("/{id}/queries/email")
+    public ResponseEntity<String> sendQueryViaEmail(
+        @PathVariable("id") Long callLogId,
+        @RequestBody EmailQueryRequest req
+    ) {
+        callLogQueryService.saveAndSendEmailQuery(callLogId, req);
+        return ResponseEntity.ok("Query saved and email sent successfully.");
+    }
+
+    
+    @PostMapping("/{id}/start-work")
+    public ResponseEntity<CallLog> startWork(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(callLogService.updateStatus(id, Status.WORK_STARTED));
+    }
+
+    
+
+    @GetMapping("/work-in-progress")
+    public ResponseEntity<List<Map<String, Object>>> getWorkInProgress() {
+        List<CallLog> workStartedLogs = callLogService.getLogsByStatus(Status.WORK_STARTED);
+
+        List<Map<String, Object>> response = new ArrayList<>();
+
+        for (CallLog log : workStartedLogs) {
+            Map<String, Object> logMap = new HashMap<>();
+            logMap.put("id", log.getId());
+            logMap.put("systemNumber", log.getSystemNumber());
+            logMap.put("customerName", log.getCustomerName());
+            logMap.put("systemType", log.getSystemType());
+
+            List<Map<String, Object>> partsList = new ArrayList<>();
+            if (log.getParts() != null) {
+                for (Part part : log.getParts()) {
+                    Map<String, Object> partMap = new HashMap<>();
+                    partMap.put("partName", part.getPartName());
+                    partMap.put("quantity", part.getQuantity());
+                    partMap.put("available", part.isAvailable());
+                    partsList.add(partMap);
+                }
+            }
+
+            logMap.put("parts", partsList);
+            response.add(logMap);
+        }
+
+        return ResponseEntity.ok(response);
+    }
+
+
+ // controller/CallLogController.java
+    @PostMapping("/{systemId}/parts")
+    public ResponseEntity<String> addPart(
+            @PathVariable("systemId") Long systemId,
+            @RequestBody PartRequest request
+    ) {
+        callLogService.addPart(systemId, request);
+        return ResponseEntity.ok("Part added successfully.");
+    }
+
+    @PutMapping("/{id}/send-bill")
+    public ResponseEntity<?> sendBill(@PathVariable("id") Long id, @RequestBody BillRequest billRequest){
+        callLogService.completeWork(
+                id,
+                billRequest.getWorkDescription(),
+                billRequest.getTotalBillAmount(),
+                billRequest.getCustomerEmail()
+        );
+        return ResponseEntity.ok("Bill email sent successfully and status updated to BILL_PENDING.");
+    }
+
+
+    
+}
